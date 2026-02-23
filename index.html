@@ -1,0 +1,560 @@
+import React, { useState } from 'react';
+import { 
+  Plus, Trash2, X, CheckCircle2, Circle, 
+  ChevronRight, Layout, ArrowLeft, MessageSquare, 
+  Clock, Send, PlusCircle, Edit3, Check, StickyNote,
+  ListTodo, Hash
+} from 'lucide-react';
+
+const App = () => {
+  // 核心資料狀態 - 子註解現在是個陣列 [{id, text}]
+  const [projects, setProjects] = useState([
+    {
+      id: 1,
+      title: "品牌官網設計",
+      description: "包含 UI/UX 設計與前端開發流程",
+      tasks: [
+        { 
+          id: 101, 
+          text: "繪製 Wireframe", 
+          completed: true, 
+          subNotes: [
+            { id: 1, text: "需要包含行動端佈局" },
+            { id: 2, text: "確認導航列的交互邏輯" }
+          ] 
+        },
+        { id: 102, text: "設計視覺風格指南", completed: true, subNotes: [] },
+        { 
+          id: 103, 
+          text: "React 元件開發", 
+          completed: false, 
+          subNotes: [
+            { id: 3, text: "優先開發 Navigation 和 Hero Section" }
+          ] 
+        }
+      ],
+      notes: [
+        { id: 1, text: "客戶希望主色調用深藍色", time: "14:30" }
+      ]
+    }
+  ]);
+
+  const [view, setView] = useState('dashboard'); 
+  const [selectedProjectId, setSelectedProjectId] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // 編輯與輸入狀態
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitleInput, setEditTitleInput] = useState("");
+  const [newProjectTitle, setNewProjectTitle] = useState("");
+  
+  // 新增專案時的初始任務，subNotes 改為陣列
+  const [newModalTasks, setNewModalTasks] = useState([{ text: "", subNotes: [""] }]);
+  
+  const [noteInput, setNoteInput] = useState(""); // 專案全局備忘錄輸入
+  const [detailTaskInput, setDetailTaskInput] = useState(""); // 詳情頁新增任務輸入
+  
+  // 任務子註解輸入狀態 (Key 為 taskId)
+  const [taskSubNoteInputs, setTaskSubNoteInputs] = useState({});
+
+  const selectedProject = projects.find(p => p.id === selectedProjectId);
+
+  // --- 通用邏輯 ---
+  const calculateProgress = (tasks) => {
+    if (tasks.length === 0) return 0;
+    const completedCount = tasks.filter(t => t.completed).length;
+    return Math.round((completedCount / tasks.length) * 100);
+  };
+
+  // --- 專案管理 ---
+  const handleAddProject = () => {
+    if (!newProjectTitle.trim()) return;
+    const project = {
+      id: Date.now(),
+      title: newProjectTitle,
+      description: "新建立的專案項目",
+      tasks: newModalTasks
+        .filter(t => t.text.trim() !== "")
+        .map((t, index) => ({ 
+          id: Date.now() + index, 
+          text: t.text, 
+          completed: false, 
+          subNotes: t.subNotes.filter(sn => sn.trim() !== "").map((sn, i) => ({ id: Date.now() + index + i + 100, text: sn }))
+        })),
+      notes: []
+    };
+    setProjects([...projects, project]);
+    setIsModalOpen(false);
+    setNewProjectTitle("");
+    setNewModalTasks([{ text: "", subNotes: [""] }]);
+  };
+
+  const deleteProject = (id, e) => {
+    e.stopPropagation();
+    setProjects(projects.filter(p => p.id !== id));
+  };
+
+  const saveProjectTitle = () => {
+    if (!editTitleInput.trim()) return;
+    setProjects(projects.map(p => 
+      p.id === selectedProjectId ? { ...p, title: editTitleInput } : p
+    ));
+    setIsEditingTitle(false);
+  };
+
+  // --- 任務與多重子註解管理 (詳情頁) ---
+  const toggleTask = (projectId, taskId) => {
+    setProjects(projects.map(p => {
+      if (p.id === projectId) {
+        return {
+          ...p,
+          tasks: p.tasks.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t)
+        };
+      }
+      return p;
+    }));
+  };
+
+  const addTaskInDetail = () => {
+    if (!detailTaskInput.trim()) return;
+    setProjects(projects.map(p => {
+      if (p.id === selectedProjectId) {
+        return {
+          ...p,
+          tasks: [...p.tasks, { id: Date.now(), text: detailTaskInput, completed: false, subNotes: [] }]
+        };
+      }
+      return p;
+    }));
+    setDetailTaskInput("");
+  };
+
+  const deleteTaskInDetail = (taskId, e) => {
+    e.stopPropagation();
+    setProjects(projects.map(p => {
+      if (p.id === selectedProjectId) {
+        return { ...p, tasks: p.tasks.filter(t => t.id !== taskId) };
+      }
+      return p;
+    }));
+  };
+
+  const addSubNoteInDetail = (taskId) => {
+    const text = taskSubNoteInputs[taskId];
+    if (!text || !text.trim()) return;
+
+    setProjects(projects.map(p => {
+      if (p.id === selectedProjectId) {
+        return {
+          ...p,
+          tasks: p.tasks.map(t => {
+            if (t.id === taskId) {
+              return { ...t, subNotes: [...t.subNotes, { id: Date.now(), text: text }] };
+            }
+            return t;
+          })
+        };
+      }
+      return p;
+    }));
+    setTaskSubNoteInputs({ ...taskSubNoteInputs, [taskId]: "" });
+  };
+
+  const deleteSubNoteInDetail = (taskId, subNoteId) => {
+    setProjects(projects.map(p => {
+      if (p.id === selectedProjectId) {
+        return {
+          ...p,
+          tasks: p.tasks.map(t => {
+            if (t.id === taskId) {
+              return { ...t, subNotes: t.subNotes.filter(sn => sn.id !== subNoteId) };
+            }
+            return t;
+          })
+        };
+      }
+      return p;
+    }));
+  };
+
+  // --- 專案全局備忘錄管理 ---
+  const addNote = () => {
+    if (!noteInput.trim()) return;
+    const now = new Date();
+    const timeString = `${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
+    setProjects(projects.map(p => {
+      if (p.id === selectedProjectId) {
+        return {
+          ...p,
+          notes: [...p.notes, { id: Date.now(), text: noteInput, time: timeString }]
+        };
+      }
+      return p;
+    }));
+    setNoteInput("");
+  };
+
+  return (
+    <div className="min-h-screen bg-[#F8FAFC] p-6 md:p-12 font-sans text-slate-900">
+      <div className="max-w-7xl mx-auto">
+        
+        {/* 控制台視圖 (Dashboard) */}
+        {view === 'dashboard' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+              <div>
+                <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">我的任務看板</h1>
+                <p className="text-slate-500 mt-2 flex items-center gap-2">
+                  <Clock size={16} /> 目前有 {projects.length} 個活躍專案
+                </p>
+              </div>
+              <button 
+                onClick={() => setIsModalOpen(true)}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl shadow-xl shadow-indigo-200 transition-all active:scale-95 flex items-center gap-2 font-bold"
+              >
+                <Plus size={20} /> 建立新專案
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {projects.map(project => {
+                const progress = calculateProgress(project.tasks);
+                return (
+                  <div 
+                    key={project.id}
+                    onClick={() => { 
+                      setSelectedProjectId(project.id); 
+                      setEditTitleInput(project.title);
+                      setView('detail'); 
+                    }}
+                    className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 hover:shadow-2xl hover:-translate-y-1 transition-all cursor-pointer group relative"
+                  >
+                    <button 
+                      onClick={(e) => deleteProject(project.id, e)}
+                      className="absolute top-6 right-6 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="w-16 h-16 relative">
+                        <svg className="w-full h-full transform -rotate-90">
+                          <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="5" fill="transparent" className="text-slate-100" />
+                          <circle
+                            cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="5" fill="transparent"
+                            strokeDasharray={2 * Math.PI * 28}
+                            strokeDashoffset={2 * Math.PI * 28 * (1 - progress / 100)}
+                            strokeLinecap="round"
+                            className="text-indigo-600 transition-all duration-700"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center text-sm font-black text-slate-800">
+                          {progress}%
+                        </div>
+                      </div>
+                    </div>
+
+                    <h3 className="text-xl font-bold text-slate-800 mb-2 group-hover:text-indigo-600 transition-colors">
+                      {project.title}
+                    </h3>
+                    <p className="text-slate-400 text-sm mb-6">{project.tasks.length} 個待辦事項</p>
+
+                    <div className="flex items-center justify-between pt-6 border-t border-slate-50">
+                      <div className="flex items-center gap-2 text-indigo-600 font-bold text-sm">
+                        進入管理 <ChevronRight size={16} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 詳情視圖 (Detail) */}
+        {view === 'detail' && selectedProject && (
+          <div className="animate-in fade-in slide-in-from-right-4 duration-500 max-w-5xl mx-auto">
+            <button 
+              onClick={() => { setView('dashboard'); setIsEditingTitle(false); }}
+              className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-8 font-medium transition-colors group"
+            >
+              <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> 返回控制台
+            </button>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* 左側：任務清單管理 */}
+              <div className="lg:col-span-2 space-y-6">
+                <div className="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100">
+                  <div className="flex justify-between items-start mb-10">
+                    <div className="flex-1 mr-4">
+                      {isEditingTitle ? (
+                        <div className="flex items-center gap-2">
+                          <input 
+                            className="text-4xl font-black text-slate-900 border-b-2 border-indigo-600 focus:outline-none w-full bg-transparent"
+                            value={editTitleInput}
+                            onChange={(e) => setEditTitleInput(e.target.value)}
+                            autoFocus
+                          />
+                          <button onClick={saveProjectTitle} className="p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700">
+                            <Check size={24} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3 group/title">
+                          <h2 className="text-4xl font-black text-slate-900">{selectedProject.title}</h2>
+                          <button 
+                            onClick={() => setIsEditingTitle(true)}
+                            className="p-2 text-slate-300 hover:text-indigo-600 opacity-0 group-hover/title:opacity-100 transition-all"
+                          >
+                            <Edit3 size={20} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <div className="text-3xl font-black text-indigo-600">{calculateProgress(selectedProject.tasks)}%</div>
+                      <div className="text-slate-400 text-xs font-bold uppercase tracking-wider">Progress</div>
+                    </div>
+                  </div>
+
+                  {/* 新增任務 */}
+                  <div className="flex gap-3 mb-8">
+                    <input 
+                      type="text" 
+                      placeholder="新增一項待辦任務..."
+                      className="flex-1 bg-slate-50 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium"
+                      value={detailTaskInput}
+                      onChange={(e) => setDetailTaskInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addTaskInDetail()}
+                    />
+                    <button 
+                      onClick={addTaskInDetail}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white w-14 h-14 rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-lg shadow-indigo-100"
+                    >
+                      <PlusCircle size={24} />
+                    </button>
+                  </div>
+
+                  {/* 任務列表 */}
+                  <div className="space-y-4">
+                    {selectedProject.tasks.map(task => (
+                      <div 
+                        key={task.id}
+                        className={`group flex flex-col p-6 rounded-3xl border transition-all ${
+                          task.completed ? 'bg-emerald-50/20 border-emerald-100' : 'bg-white border-slate-100 hover:border-indigo-100 shadow-sm shadow-slate-100'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div 
+                            className="flex items-center gap-4 cursor-pointer flex-1"
+                            onClick={() => toggleTask(selectedProject.id, task.id)}
+                          >
+                            {task.completed ? (
+                              <div className="bg-emerald-500 rounded-full p-1"><CheckCircle2 size={18} className="text-white" /></div>
+                            ) : (
+                              <Circle size={22} className="text-slate-300" />
+                            )}
+                            <span className={`text-lg ${task.completed ? 'text-slate-400 line-through' : 'text-slate-800 font-bold'}`}>
+                              {task.text}
+                            </span>
+                          </div>
+                          <button 
+                            onClick={(e) => deleteTaskInDetail(task.id, e)}
+                            className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-2"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+
+                        {/* 多重子註解列表 */}
+                        <div className="mt-4 ml-10 space-y-3">
+                          {task.subNotes.map((sn, idx) => (
+                            <div key={sn.id} className="flex items-start gap-3 group/sn bg-slate-50/50 p-2 rounded-xl border border-transparent hover:border-slate-200 transition-all">
+                              <div className="mt-1 flex items-center justify-center w-5 h-5 bg-indigo-100 text-indigo-600 rounded text-[10px] font-bold shrink-0">
+                                {idx + 1}
+                              </div>
+                              <p className="text-sm text-slate-600 leading-relaxed flex-1">{sn.text}</p>
+                              <button 
+                                onClick={() => deleteSubNoteInDetail(task.id, sn.id)}
+                                className="text-slate-300 hover:text-red-400 opacity-0 group-hover/sn:opacity-100 transition-opacity p-1"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
+                          
+                          {/* 新增子註解輸入框 */}
+                          <div className="flex items-center gap-2 mt-4 bg-white rounded-xl border border-slate-100 p-1 focus-within:border-indigo-200 transition-all">
+                            <StickyNote size={14} className="ml-3 text-slate-400" />
+                            <input 
+                              className="flex-1 bg-transparent border-none text-sm py-2 px-2 focus:ring-0 text-slate-600 placeholder:text-slate-300 italic"
+                              placeholder="新增子註解並按 Enter..."
+                              value={taskSubNoteInputs[task.id] || ""}
+                              onChange={(e) => setTaskSubNoteInputs({ ...taskSubNoteInputs, [task.id]: e.target.value })}
+                              onKeyDown={(e) => e.key === 'Enter' && addSubNoteInDetail(task.id)}
+                            />
+                            {taskSubNoteInputs[task.id] && (
+                              <button 
+                                onClick={() => addSubNoteInDetail(task.id)}
+                                className="mr-1 p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
+                              >
+                                <Send size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* 右側：專案全局備忘錄 */}
+              <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl min-h-[500px] flex flex-col">
+                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                  <MessageSquare size={20} className="text-indigo-400" /> 專案控制台備忘
+                </h3>
+                
+                <div className="flex-1 space-y-4 overflow-y-auto pr-2 mb-6 custom-scrollbar">
+                  {selectedProject.notes.map(note => (
+                    <div key={note.id} className="bg-white/10 p-4 rounded-2xl relative group border border-white/5">
+                      <p className="text-sm leading-relaxed mb-2 pr-4">{note.text}</p>
+                      <div className="text-[10px] text-indigo-400 font-mono">{note.time}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="relative mt-auto">
+                  <input 
+                    type="text" 
+                    placeholder="新增全局註解..."
+                    className="w-full bg-white/10 border border-white/10 rounded-xl py-3 pl-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    value={noteInput}
+                    onChange={(e) => setNoteInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addNote()}
+                  />
+                  <button onClick={addNote} className="absolute right-2 top-1.5 p-1.5 bg-indigo-500 hover:bg-indigo-600 rounded-lg">
+                    <Send size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: 新增專案 (Updated to include Multiple Task Subnotes) */}
+        {isModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl animate-in fade-in zoom-in duration-300 max-h-[90vh] flex flex-col overflow-hidden">
+              <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-indigo-50/30">
+                <h2 className="text-2xl font-black text-slate-800">規劃新計畫</h2>
+                <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={24} /></button>
+              </div>
+              
+              <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar flex-1">
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 block">專案基本資訊</label>
+                  <input 
+                    type="text" placeholder="輸入專案名稱..."
+                    className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-none text-lg font-bold focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                    value={newProjectTitle}
+                    onChange={(e) => setNewProjectTitle(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-6">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block">初始任務與註解列表</label>
+                  {newModalTasks.map((task, taskIdx) => (
+                    <div key={taskIdx} className="space-y-4 p-6 bg-slate-50/50 rounded-3xl border border-slate-100">
+                      <div className="flex gap-3 items-center">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                          {taskIdx + 1}
+                        </div>
+                        <input 
+                          placeholder="任務名稱..."
+                          className="flex-1 bg-white border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold"
+                          value={task.text}
+                          onChange={(e) => {
+                            const updated = [...newModalTasks];
+                            updated[taskIdx].text = e.target.value;
+                            setNewModalTasks(updated);
+                          }}
+                        />
+                        {newModalTasks.length > 1 && (
+                          <button onClick={() => setNewModalTasks(newModalTasks.filter((_, i) => i !== taskIdx))} className="text-slate-300 hover:text-red-500 transition-colors">
+                            <Trash2 size={18} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Modal 內的子註解編輯 */}
+                      <div className="ml-11 space-y-2">
+                        {task.subNotes.map((sn, snIdx) => (
+                          <div key={snIdx} className="flex gap-2 items-center">
+                            <StickyNote size={12} className="text-indigo-400 shrink-0" />
+                            <input 
+                              placeholder={`子註解 ${snIdx + 1}...`}
+                              className="flex-1 bg-white border-slate-100 rounded-lg px-3 py-2 text-xs text-slate-600 focus:ring-1 focus:ring-indigo-500"
+                              value={sn}
+                              onChange={(e) => {
+                                const updated = [...newModalTasks];
+                                updated[taskIdx].subNotes[snIdx] = e.target.value;
+                                setNewModalTasks(updated);
+                              }}
+                            />
+                            {task.subNotes.length > 1 && (
+                              <button onClick={() => {
+                                const updated = [...newModalTasks];
+                                updated[taskIdx].subNotes = updated[taskIdx].subNotes.filter((_, i) => i !== snIdx);
+                                setNewModalTasks(updated);
+                              }} className="text-slate-200 hover:text-red-400">
+                                <X size={12} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        <button 
+                          onClick={() => {
+                            const updated = [...newModalTasks];
+                            updated[taskIdx].subNotes.push("");
+                            setNewModalTasks(updated);
+                          }}
+                          className="text-[10px] font-bold text-indigo-500 hover:text-indigo-700 flex items-center gap-1"
+                        >
+                          <Plus size={10} /> 新增子註解欄位
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  <button 
+                    onClick={() => setNewModalTasks([...newModalTasks, { text: "", subNotes: [""] }])} 
+                    className="w-full py-4 rounded-2xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-indigo-300 hover:text-indigo-600 transition-all font-bold text-sm flex items-center justify-center gap-2"
+                  >
+                    <ListTodo size={18} /> 增加下一個任務
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-8 border-t border-slate-50 bg-white shadow-[0_-10px_20px_rgba(0,0,0,0.02)]">
+                <button 
+                  onClick={handleAddProject} 
+                  className="w-full py-4 rounded-2xl font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-[0.98]"
+                >
+                  正式開始計畫
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; }
+      `}</style>
+    </div>
+  );
+};
+
+export default App;
