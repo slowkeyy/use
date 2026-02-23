@@ -38,8 +38,8 @@
             text: "繪製 Wireframe", 
             completed: true, 
             subNotes: [
-              { id: 1, text: "需要包含行動端佈局" },
-              { id: 2, text: "確認導航列的交互邏輯" }
+              { id: 1, text: "需要包含行動端佈局", completed: false },
+              { id: 2, text: "確認導航列的交互邏輯", completed: true }
             ] 
           },
           { id: 102, text: "設計視覺風格指南", completed: true, subNotes: [] },
@@ -48,7 +48,7 @@
             text: "React 元件開發", 
             completed: false, 
             subNotes: [
-              { id: 3, text: "優先開發 Navigation 和 Hero Section" }
+              { id: 3, text: "優先開發 Navigation 和 Hero Section", completed: false }
             ] 
           }
         ],
@@ -62,6 +62,7 @@
     let selectedProjectId = null;
     let isModalOpen = false;
     let isEditingTitle = false;
+    let expandedTasks = []; // 紀錄目前展開子註解的代辦任務 ID
 
     // Modal 表單暫存資料
     let modalData = {
@@ -186,15 +187,48 @@
 
       // 任務列表
       let tasksHtml = project.tasks.map(task => {
-        let subNotesHtml = task.subNotes.map((sn, idx) => `
-          <div class="flex items-start gap-3 group/sn bg-slate-50/50 p-2 rounded-xl border border-transparent hover:border-slate-200 transition-all">
-            <div class="mt-1 flex items-center justify-center w-5 h-5 bg-indigo-100 text-indigo-600 rounded text-[10px] font-bold shrink-0">${idx + 1}</div>
-            <p class="text-sm text-slate-600 leading-relaxed flex-1">${sn.text}</p>
-            <button onclick="deleteSubNoteInDetail(${task.id}, ${sn.id})" class="text-slate-300 hover:text-red-400 opacity-0 group-hover/sn:opacity-100 transition-opacity p-1">
-              <i data-lucide="x" width="14" height="14"></i>
-            </button>
-          </div>
-        `).join('');
+        const isExpanded = expandedTasks.includes(task.id);
+        const uncompletedCount = task.subNotes.filter(sn => !sn.completed).length;
+        const totalCount = task.subNotes.length;
+
+        // 子註解未完成數量標籤
+        let indicatorHtml = '';
+        if (totalCount > 0) {
+          indicatorHtml = `
+            <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${uncompletedCount > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}">
+              ${uncompletedCount > 0 ? `${uncompletedCount} 項未完成` : '註解已全完成'}
+            </span>
+          `;
+        }
+
+        // 子註解展開內容
+        let subNotesSectionHtml = '';
+        if (isExpanded) {
+          let subNotesHtml = task.subNotes.map((sn, idx) => `
+            <div class="flex items-start gap-3 group/sn bg-slate-50/50 p-2.5 rounded-xl border border-transparent hover:border-slate-200 transition-all cursor-pointer" onclick="toggleSubNoteInDetail(${task.id}, ${sn.id}, event)">
+              <div class="mt-0.5 flex items-center justify-center w-5 h-5 rounded text-[10px] font-bold shrink-0 ${sn.completed ? 'bg-emerald-500 text-white' : 'bg-indigo-100 text-indigo-600'}">
+                ${sn.completed ? '<i data-lucide="check" width="12" height="12"></i>' : (idx + 1)}
+              </div>
+              <p class="text-sm ${sn.completed ? 'text-slate-400 line-through' : 'text-slate-700'} leading-relaxed flex-1">${sn.text}</p>
+              <button onclick="deleteSubNoteInDetail(${task.id}, ${sn.id}, event)" class="text-slate-300 hover:text-red-400 opacity-0 group-hover/sn:opacity-100 transition-opacity p-1">
+                <i data-lucide="x" width="14" height="14"></i>
+              </button>
+            </div>
+          `).join('');
+
+          subNotesSectionHtml = `
+            <div class="mt-4 ml-10 space-y-3 animate-in slide-in-from-top-2 duration-300 border-l-2 border-slate-100 pl-4">
+              ${subNotesHtml}
+              <div class="flex items-center gap-2 mt-3 bg-white rounded-xl border border-slate-100 p-1 focus-within:border-indigo-200 transition-all">
+                <i data-lucide="sticky-note" width="14" height="14" class="ml-3 text-slate-400"></i>
+                <input id="subnote-input-${task.id}" class="flex-1 bg-transparent border-none text-sm py-2 px-2 focus:ring-0 focus:outline-none text-slate-600 placeholder:text-slate-300 italic" placeholder="新增子註解並按 Enter..." onkeydown="if(event.key==='Enter') addSubNoteInDetail(${task.id})">
+                <button onclick="addSubNoteInDetail(${task.id})" class="mr-1 p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors">
+                  <i data-lucide="send" width="14" height="14"></i>
+                </button>
+              </div>
+            </div>
+          `;
+        }
 
         return `
           <div class="group flex flex-col p-6 rounded-3xl border transition-all ${task.completed ? 'bg-emerald-50/20 border-emerald-100' : 'bg-white border-slate-100 hover:border-indigo-100 shadow-sm shadow-slate-100'}">
@@ -204,23 +238,23 @@
                   `<div class="bg-emerald-500 rounded-full p-1"><i data-lucide="check" width="14" height="14" class="text-white"></i></div>` : 
                   `<i data-lucide="circle" width="22" height="22" class="text-slate-300"></i>`
                 }
-                <span class="text-lg ${task.completed ? 'text-slate-400 line-through' : 'text-slate-800 font-bold'}">${task.text}</span>
+                <div class="flex items-center flex-wrap gap-2">
+                  <span class="text-lg ${task.completed ? 'text-slate-400 line-through' : 'text-slate-800 font-bold'}">${task.text}</span>
+                  ${indicatorHtml}
+                </div>
               </div>
-              <button onclick="deleteTaskInDetail(${task.id}, event)" class="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-2">
-                <i data-lucide="trash-2" width="18" height="18"></i>
-              </button>
-            </div>
 
-            <div class="mt-4 ml-10 space-y-3">
-              ${subNotesHtml}
-              <div class="flex items-center gap-2 mt-4 bg-white rounded-xl border border-slate-100 p-1 focus-within:border-indigo-200 transition-all">
-                <i data-lucide="sticky-note" width="14" height="14" class="ml-3 text-slate-400"></i>
-                <input id="subnote-input-${task.id}" class="flex-1 bg-transparent border-none text-sm py-2 px-2 focus:ring-0 focus:outline-none text-slate-600 placeholder:text-slate-300 italic" placeholder="新增子註解並按 Enter..." onkeydown="if(event.key==='Enter') addSubNoteInDetail(${task.id})">
-                <button onclick="addSubNoteInDetail(${task.id})" class="mr-1 p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors">
-                  <i data-lucide="send" width="14" height="14"></i>
+              <div class="flex items-center gap-2 ml-4">
+                <button onclick="toggleTaskExpand(${task.id}, event)" class="px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 text-sm font-medium ${isExpanded ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:bg-slate-50 hover:text-indigo-600'}">
+                  ${isExpanded ? '收起註解' : '展開註解'}
+                  <i data-lucide="${isExpanded ? 'chevron-up' : 'chevron-down'}" width="16" height="16"></i>
+                </button>
+                <button onclick="deleteTaskInDetail(${task.id}, event)" class="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-2">
+                  <i data-lucide="trash-2" width="18" height="18"></i>
                 </button>
               </div>
             </div>
+            ${subNotesSectionHtml}
           </div>
         `;
       }).join('');
@@ -421,7 +455,7 @@
             id: Date.now() + index,
             text: t.text,
             completed: false,
-            subNotes: t.subNotes.filter(sn => sn.trim() !== "").map((sn, i) => ({ id: Date.now() + index + i + 100, text: sn }))
+            subNotes: t.subNotes.filter(sn => sn.trim() !== "").map((sn, i) => ({ id: Date.now() + index + i + 100, text: sn, completed: false }))
           })),
         notes: []
       };
@@ -435,6 +469,7 @@
       selectedProjectId = id;
       view = 'detail';
       isEditingTitle = false;
+      expandedTasks = []; // 進入專案時，預設收起所有註解
       render();
     };
 
@@ -462,6 +497,16 @@
         if (project) project.title = input.value.trim();
       }
       isEditingTitle = false;
+      render();
+    };
+
+    window.toggleTaskExpand = function(taskId, e) {
+      if (e) e.stopPropagation();
+      if (expandedTasks.includes(taskId)) {
+        expandedTasks = expandedTasks.filter(id => id !== taskId);
+      } else {
+        expandedTasks.push(taskId);
+      }
       render();
     };
 
@@ -495,6 +540,20 @@
       }
     };
 
+    // 切換子註解完成狀態
+    window.toggleSubNoteInDetail = function(taskId, subNoteId, e) {
+      if (e) e.stopPropagation();
+      const project = projects.find(p => p.id === selectedProjectId);
+      if (project) {
+        const task = project.tasks.find(t => t.id === taskId);
+        if (task) {
+          const sn = task.subNotes.find(s => s.id === subNoteId);
+          if (sn) sn.completed = !sn.completed;
+          render();
+        }
+      }
+    };
+
     window.addSubNoteInDetail = function(taskId) {
       const input = document.getElementById(`subnote-input-${taskId}`);
       const text = input.value.trim();
@@ -504,13 +563,18 @@
       if (project) {
         const task = project.tasks.find(t => t.id === taskId);
         if (task) {
-          task.subNotes.push({ id: Date.now(), text: text });
+          task.subNotes.push({ id: Date.now(), text: text, completed: false });
+          // 如果新增註解時該任務未展開，自動將其展開
+          if (!expandedTasks.includes(taskId)) {
+            expandedTasks.push(taskId);
+          }
           render();
         }
       }
     };
 
-    window.deleteSubNoteInDetail = function(taskId, subNoteId) {
+    window.deleteSubNoteInDetail = function(taskId, subNoteId, e) {
+      if (e) e.stopPropagation();
       const project = projects.find(p => p.id === selectedProjectId);
       if (project) {
         const task = project.tasks.find(t => t.id === taskId);
